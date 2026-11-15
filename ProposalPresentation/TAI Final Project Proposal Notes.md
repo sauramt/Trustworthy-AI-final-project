@@ -1,5 +1,7 @@
 # TAI Project Proposal Notes
 
+// This is a .md copy of https://docs.google.com/document/d/1zjR5ZCYgz0JJdtGfu7pg_UupEvCTG3Bm46DQSUKfGWk/edit?usp=sharing
+
 * Measure the uncertainty during training (instead of after)  
 * Loss functions A02: hard label vs ;hyperparameter to balance the two losses  
   * Can leverage the uncertainty quantification to help to balance during training process  
