@@ -1,0 +1,346 @@
+\documentclass[aspectratio=169,11pt,professionalfonts]{beamer}
+
+% =========================
+% Theme / Packages (preamble of the course template TAI_midterm_paper_template.tex)
+% =========================
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,tabularx,array,multirow}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{hyperref}
+\pdfstringdefDisableCommands{\def\translate#1{#1}}
+\usepackage{ragged2e}
+\usetikzlibrary{positioning,arrows.meta}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{itemize item}{\small\raise1.0pt\hbox{$\blacktriangleright$}}
+\setbeamertemplate{itemize subitem}{\scriptsize\raise1.0pt\hbox{$\bullet$}}
+
+\definecolor{nycuBlue}{HTML}{0033A0}
+\definecolor{nycuLight}{RGB}{231,242,250}
+\definecolor{darkText}{RGB}{34,34,34}
+\definecolor{softGray}{RGB}{110,110,110}
+\definecolor{goodGreen}{RGB}{30,120,76}
+\definecolor{badRed}{RGB}{176,45,45}
+
+\setbeamercolor{title}{fg=white,bg=nycuBlue}
+\setbeamercolor{frametitle}{fg=white,bg=nycuBlue}
+\setbeamercolor{structure}{fg=nycuBlue}
+\setbeamercolor{normal text}{fg=darkText,bg=white}
+\setbeamercolor{block title}{fg=white,bg=nycuBlue}
+\setbeamercolor{block body}{fg=darkText,bg=nycuLight}
+\setbeamercolor{block title alerted}{fg=white,bg=badRed}
+\setbeamercolor{block body alerted}{fg=darkText,bg=nycuLight}
+\setbeamercolor{alerted text}{fg=badRed}
+\setbeamercolor{footline}{fg=white,bg=nycuBlue}
+
+\setbeamerfont{title}{series=\bfseries,size=\Large}
+\setbeamerfont{frametitle}{series=\bfseries,size=\large}
+\setbeamerfont{subtitle}{size=\normalsize}
+
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+  \begin{beamercolorbox}[wd=.72\paperwidth,ht=2.75ex,dp=1.2ex,leftskip=1em]{footline}%
+    Trustworthy AI | Midterm Project Proposal | Group 3
+  \end{beamercolorbox}%
+  \begin{beamercolorbox}[wd=.28\paperwidth,ht=2.75ex,dp=1.2ex,right,rightskip=1em]{footline}%
+    \insertframenumber/\inserttotalframenumber
+  \end{beamercolorbox}}%
+}
+
+\newcommand{\keymsg}[1]{%
+  \begin{beamercolorbox}[wd=\linewidth,rounded=true,sep=0.6em]{block body}
+  \textbf{Key message:} #1
+  \end{beamercolorbox}
+}
+\newcommand{\src}[1]{{\scriptsize\color{softGray}#1}}
+\newcommand{\CE}{\mathrm{CE}}
+\newcommand{\fw}{f_w}
+\newcommand{\fhat}{\hat f_t}
+\newcommand{\ftil}{\tilde f_\tau}
+\newcommand{\pbar}{\bar p}
+
+\title[TAI Proposal]{Uncertainty-Aware Weak-to-Strong Generalization}
+\subtitle{Letting a strong student abstain from its own pseudo-labels during training}
+\author[Group 3]{Chlo\'e Deux-Pancera \quad|\quad Djameledine Kacem Hadji \quad|\quad Tom\'as Saura Mart\'{\i}nez}
+\institute{Group 3 \quad$\cdot$\quad National Yang Ming Chiao Tung University}
+\date{Midterm Project Proposal \quad$\cdot$\quad November 18, 2026}
+
+\begin{document}
+
+% ---------------------------------------------------------------- 1. Title
+\begin{frame}[plain]
+  \titlepage
+  \vspace{-1.2em}
+  \begin{center}
+    {\small\textbf{Key papers:} Burns et al., \emph{Weak-to-Strong Generalization}, ICML 2024 (A02)\\[0.2em]
+    Thuy \& Benoit, \emph{Explainability through Uncertainty}, EJOR 2024 (U09)}
+  \end{center}
+\end{frame}
+
+% ---------------------------------------------------------------- 2. TAI issue and motivation
+\begin{frame}[t]{Trustworthy AI Issue and Motivation}
+\begin{block}{Issue: reliability, uncertainty awareness and human oversight under weak supervision}
+A strong model is often trained on labels from a \textbf{weaker supervisor} (an older model, a rule, a hurried
+annotator). No ground truth exists to audit it afterwards, so its \textbf{own uncertainty} is the only signal
+that tells a human which predictions to check.
+\end{block}
+\vspace{-0.2em}
+\begin{itemize}\small
+  \item \textbf{Example: automated visual quality inspection.} A legacy classifier labels product images; a
+  pretrained vision model learns from these imperfect labels and replaces it on the line.
+  \item \textbf{The risk:} the new model \emph{copies} some of the old model's mistakes and is confident about
+  them, so a defective part is approved and nobody is asked to look.
+  \item \textbf{What the factory needs:} not only higher accuracy, but a model that \emph{defers} the right
+  images to an inspector (same pattern: medical triage, content moderation).
+\end{itemize}
+\vspace{0.2em}
+\keymsg{under weak supervision, accuracy alone is not trust: the model must know when its teacher,
+and it itself, may be wrong.}
+\end{frame}
+
+% ---------------------------------------------------------------- 3. Key paper A02
+\begin{frame}[t]{Key Paper 1: Weak-to-Strong Generalization (A02)}
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.56\textwidth}
+\begin{block}{Method (Burns et al., 2024)}
+\small
+A strong pretrained student is trained on the labels of a weak supervisor $\fw$. The
+\textbf{auxiliary confidence loss} mixes them with the student's own \emph{hardened} prediction $\fhat$:
+\[
+L_{\text{conf}}(f)=\CE\!\big(f(x),\;(1-\alpha)\,\fw(x)+\alpha\,\fhat(x)\big)
+\]
+\[
+\fhat(x)=I[f(x)>t]\in\{0,1\}
+\]
+\end{block}
+\src{Source: Burns et al.\ (2024), App.\ A.4. Code: github.com/openai/weak-to-strong (MIT).}
+\column{0.41\textwidth}
+\small
+\textbf{What it solved}
+\begin{itemize}\footnotesize
+  \item Students outperform their supervisor; the loss raises the performance gap recovered (PGR).
+\end{itemize}
+\textbf{What remains open}
+\begin{itemize}\footnotesize
+  \item Judged by \textbf{accuracy only}: no calibration, no abstention.
+  \item $\fhat$ is a \textbf{point estimate, hardened on every example}: where the student has copied a
+  teacher error, the loss \emph{reinforces} it with full confidence.
+\end{itemize}
+\end{columns}
+\vspace{0.5em}
+\keymsg{the confidence loss tells the student to trust itself everywhere; it never asks how sure the student is.}
+\end{frame}
+
+% ---------------------------------------------------------------- 4. Key paper U09
+\begin{frame}[t]{Key Paper 2: Explainability through Uncertainty (U09)}
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.56\textwidth}
+\begin{block}{Two-stage framework (Thuy \& Benoit, 2024)}
+\footnotesize
+\textbf{1. Uncertainty estimation} with $T$ stochastic passes $p_1,\dots,p_T$ (MC Dropout or Deep Ensembles),
+$\pbar=\tfrac1T\sum_t p_t$:
+\vspace{-0.5em}
+\[
+\underbrace{H(\pbar)}_{\text{total}}=\underbrace{\tfrac1T\textstyle\sum_t H(p_t)}_{\text{data}}
++\underbrace{H(\pbar)-\tfrac1T\textstyle\sum_t H(p_t)}_{\text{model}}
+\]
+\textbf{2. Classification with rejection:} the most uncertain cases go to a human (non-rejected accuracy,
+classification and rejection quality).
+\end{block}
+\src{Source: Thuy \& Benoit (2024), Sects.\ 3--4; re-implemented by us.}
+\column{0.41\textwidth}
+\small
+\textbf{What it solved}
+\begin{itemize}\footnotesize
+  \item Makes uncertainty \emph{actionable}: under distribution shift, rejection recovers accuracy where a
+  standard network is confidently wrong.
+\end{itemize}
+\textbf{What remains open}
+\begin{itemize}\footnotesize
+  \item Assumes \textbf{clean training labels}.
+  \item Uncertainty is used only \textbf{after training}, at prediction time.
+\end{itemize}
+\end{columns}
+\vspace{0.5em}
+\keymsg{U09 has the tool A02 lacks. We move its rejection step \emph{inside} A02's training loss.}
+\end{frame}
+
+% ---------------------------------------------------------------- 5. RQ and contribution
+\begin{frame}[t]{Research Question and Contribution}
+\begin{block}{Research question}
+If the self-training target $\fhat$ of the confidence loss is made \textbf{uncertainty-aware}, does a strong student
+trained on weak labels become \textbf{more reliable about which of its predictions to trust}, without losing
+accuracy?
+\end{block}
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.49\textwidth}
+\small\textbf{Methodological contribution}
+\begin{itemize}\footnotesize
+  \item An uncertainty-gated self-target $\ftil$ that replaces $\fhat$; A02 is the special case ``always harden''.
+  \item A reliability evaluation of weak-to-strong learning: calibration, abstention, and detection of
+  \emph{copied} teacher errors.
+\end{itemize}
+\column{0.49\textwidth}
+\small\textbf{Practical contribution}
+\begin{itemize}\footnotesize
+  \item A training recipe for any pipeline that replaces a weak labeller by a pretrained model and has a
+  human review budget.
+  \item Evidence on \emph{which} uncertainty (data, model, total) is worth computing for that purpose.
+\end{itemize}
+\end{columns}
+\vspace{0.5em}
+\keymsg{we do not change how much the student trusts itself ($\alpha$); we change \emph{where} it is allowed to.}
+\end{frame}
+
+% ---------------------------------------------------------------- 6. Method
+\begin{frame}[t]{Proposed Method: an Uncertainty-Gated Self-Target}
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.53\textwidth}
+\small
+\textbf{Step 1 (U09, stage 1).} For each training image run $T$ MC-Dropout passes of the student:
+$\pbar(x)$ and the \emph{model} uncertainty $u(x)$.
+
+\vspace{0.4em}
+\textbf{Step 2 (U09, stage 2, inside the loss).} Harden only where the student is certain:
+\[
+\ftil(x)=
+\begin{cases}
+\text{one-hot}\big(\arg\max \pbar(x)\big) & u(x)\le\tau\\[0.2em]
+\pbar(x) & u(x)>\tau
+\end{cases}
+\]
+\textbf{Step 3 (A02, unchanged).}
+\[
+L(f)=\CE\!\big(f(x),\,(1-\alpha)\,\fw(x)+\alpha\,\ftil(x)\big)
+\]
+\column{0.44\textwidth}
+\begin{block}{Design choices}
+\footnotesize
+\begin{itemize}
+  \item $\tau$ is a \textbf{batch quantile}: a fraction $q$ of each batch is hardened (A02 also sets $t$ per
+  batch). $q$ is a \emph{training coverage}.
+  \item $q=1$: A02. \quad $q=0$: no self-sharpening.
+  \item $\alpha$ and its warm-up: as in A02.
+\end{itemize}
+\end{block}
+\footnotesize
+\textbf{Why it should help:} the gradient on the logits is $f-\text{target}$. A hard target pushes
+confidence up; the soft target $\pbar\approx f$ pushes almost nowhere. Confidence is amplified only where
+the student's belief is stable.
+\end{columns}
+\vspace{0.3em}
+\keymsg{classification with rejection, applied to the student's own pseudo-labels during training.}
+\end{frame}
+
+% ---------------------------------------------------------------- 7. Data and design
+\begin{frame}[t]{Planned Data, Models and Comparisons}
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.47\textwidth}
+\begin{block}{Data and models}
+\footnotesize
+\begin{itemize}
+  \item \textbf{CIFAR-10}, one fixed split: 20k teacher / 25k student / 5k validation / 10k test.
+  Ground truth is used only for the teacher, the ceiling and the test.
+  \item \textbf{Weak teacher:} small CNN (62\% in our pilot); an AlexNet probe as a stronger second teacher.
+  \item \textbf{Strong student:} frozen DINO ViT-S/16 (self-supervised on ImageNet, \emph{no labels}) + MLP head
+  with dropout.
+  \item \textbf{Why ``strong'':} trained on true labels, the same student reaches 95.6\%.
+\end{itemize}
+\end{block}
+\column{0.50\textwidth}
+\small\textbf{Training strategies compared}
+
+\vspace{0.2em}
+\footnotesize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{0.84\linewidth}@{}}
+\toprule
+A & Naive: weak labels only ($\alpha=0$)\\
+B & A02 confidence loss, $\fhat$ hardened everywhere\\
+C & Per-image $\alpha_i=\alpha_{\max}(1-u_i)$ \;(piloted)\\
+\textbf{D} & \textbf{Ours: gated self-target $\ftil$}, $q\in\{0.25,0.5,0.75\}$\\
+D$'$ & Ablations: random gate; $u$ = total / data / model; soft blend instead of a hard gate\\
+-- & Ceiling: same student on true labels\\
+\bottomrule
+\end{tabular}
+
+\vspace{0.4em}
+\footnotesize 5 seeds per configuration. Optional stress test, as in U09: CIFAR-10-C noise and blur.
+\end{columns}
+\vspace{0.3em}
+\src{DINO: Caron et al.\ (2021). CIFAR-10-C: Hendrycks \& Dietterich (2019). Features are extracted once; each run trains a small head.}
+\end{frame}
+
+% ---------------------------------------------------------------- 8. Evaluation
+\begin{frame}[t]{Evaluation Strategy}
+\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}p{0.27\textwidth}p{0.36\textwidth}p{0.30\textwidth}@{}}
+\toprule
+\textbf{Metric} & \textbf{Question it answers} & \textbf{Hypothesis for D vs.\ B}\\
+\midrule
+Accuracy, PGR & Does the student still beat its teacher? & H1: no loss (within seed noise)\\[0.25em]
+\textbf{Accuracy--coverage curve}, AURC; non-rejected accuracy, CQ, RQ (U09) &
+If the most uncertain images go to a human, how accurate is the rest? & H2: higher accuracy at 80\% and 90\% coverage\\[0.25em]
+AUROC of uncertainty for errors, and for \textbf{errors copied from the teacher} &
+Does uncertainty flag the mistakes, including inherited ones? & H2: higher, largest gain on copied errors\\[0.25em]
+ECE, reliability diagram & Does confidence match correctness? & Not worse than B\\[0.25em]
+Gate diagnostic (training set) & Are the images the gate refuses to harden the ones the teacher mislabelled? &
+H3: teacher-error rate higher above $\tau$ than below\\
+\bottomrule
+\end{tabular}
+\vspace{0.5em}
+\begin{itemize}\footnotesize
+  \item Mean $\pm$ standard deviation over seeds; D is compared with B at \emph{equal} $\alpha$, and with a random
+  gate at equal $q$, so that a gain can only come from the uncertainty.
+  \item A null result is informative: it would say that hardening everywhere is already adequate in this setting.
+\end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------------- 9. Pilot and plan
+\begin{frame}[t]{Pilot Evidence, Plan and Takeaway}
+\begin{columns}[T,totalwidth=\textwidth]
+\column{0.57\textwidth}
+\small\textbf{Pilot} (CIFAR-10, small CNN $\to$ DINO ViT-S/16, 3 seeds)
+
+\vspace{0.2em}
+\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Method & Acc. & Acc.@80\% & AUROC & AUROC\\
+ & & cov. & errors & copied\\
+\midrule
+Weak teacher & 0.624 & -- & -- & --\\
+A: naive & 0.720 & 0.793 & 0.793 & 0.735\\
+B: A02 ($\alpha=0.5$) & 0.727 & 0.801 & 0.794 & 0.733\\
+C: per-image $\alpha$ & 0.726 & 0.805 & \textbf{0.804} & \textbf{0.745}\\
+Ceiling (true labels) & 0.956 & 0.996 & 0.944 & 0.926\\
+\bottomrule
+\end{tabular}
+
+\vspace{0.3em}
+\footnotesize
+Accuracy is unchanged ($\pm0.03$ across seeds); error detection improves slightly but consistently
+($\pm0.004$). Copied errors are the hardest to flag in every row. D is not run yet.
+\column{0.40\textwidth}
+\begin{block}{Plan}
+\footnotesize
+\begin{itemize}
+  \item \textbf{Dec 2:} A--D on one teacher, 5 seeds; gate diagnostic.
+  \item \textbf{Dec 16:} ablations, second teacher, CIFAR-10-C.
+  \item \textbf{Dec 23:} poster and report.
+\end{itemize}
+\end{block}
+\footnotesize
+\textbf{Main risk:} MC Dropout on a small head may give a weak model-uncertainty signal. Fallback: a
+5-head ensemble (U09's second estimator).
+\end{columns}
+\vspace{0.3em}
+\keymsg{A02 makes the student confident; U09 makes uncertainty actionable. We test whether combining them
+\emph{during training} gives a student that knows when not to be trusted.}
+\end{frame}
+
+\end{document}

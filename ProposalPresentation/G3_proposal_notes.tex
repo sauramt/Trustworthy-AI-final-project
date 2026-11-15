@@ -1,0 +1,288 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=2cm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,enumitem,hyperref,parskip,xcolor}
+\setlist{nosep,leftmargin=1.4em}
+\hypersetup{colorlinks=true,urlcolor=blue!60!black,linkcolor=black}
+\newcommand{\CE}{\mathrm{CE}}
+\newcommand{\fw}{f_w}
+\newcommand{\fhat}{\hat f_t}
+\newcommand{\ftil}{\tilde f_\tau}
+\newcommand{\pbar}{\bar p}
+\newcommand{\Q}[1]{\par\medskip\noindent\textbf{Q: #1}\par\noindent}
+\title{\vspace{-1.5cm}Group 3 proposal: theory, speaker notes and Q\&A\\[0.2em]
+\large Uncertainty-Aware Weak-to-Strong Generalization (deck: \texttt{G3\_proposal\_slides.pdf})}
+\author{\normalsize Trustworthy AI, NYCU \quad$\cdot$\quad proposal talk Wed 18 Nov 2026, A304: 10 min + 5 min Q\&A}
+\date{}
+\begin{document}
+\maketitle
+\vspace{-1.2cm}
+
+\section{The proposal in five sentences}
+A02 (Burns et al., 2024) trains a strong pretrained student on the labels of a weak teacher and adds a
+\emph{confidence loss} that makes the student also trust its own hardened prediction $\fhat$.
+The paper judges the result by accuracy only.
+U09 (Thuy \& Benoit, 2024) shows how to estimate uncertainty (MC Dropout, ensembles) and use it to
+\emph{reject} doubtful predictions, but only after training and with clean labels.
+We put U09's rejection step \emph{inside} A02's loss: the student hardens its own prediction only where its
+model uncertainty is low.
+We then ask whether this student is better at telling a human which predictions to check, at equal accuracy.
+
+\section{Theory: how and why to modify $\fhat$}
+
+\subsection{What the A02 loss does}
+\[
+L_{\text{conf}}(f)=(1-\alpha)\,\CE(f(x),\fw(x))+\alpha\,\CE(f(x),\fhat(x))
+=\CE\big(f(x),\;(1-\alpha)\fw(x)+\alpha\fhat(x)\big)
+\]
+(App.\ A.4, Eqs.\ 1--2; the two forms are equal because cross-entropy is linear in its target).
+$f(x)$ is the student's predicted distribution, $\fw(x)$ the teacher's, and
+$\fhat(x)=I[f(x)>t]$ the student's own prediction turned into a hard 0/1 label.
+$\alpha$ is a fixed weight (0.5, or 0.75 for the largest students) warmed up linearly from 0 over the first
+20\,\% of training. In the paper's binary tasks $t$ is set per batch so that exactly half of the batch is
+labelled positive (a class-prior constraint). With 10 classes the natural version is
+$\fhat=\text{one-hot}(\arg\max f(x))$; the paper's footnote says the prior should then be computed from the
+weak predictions.
+
+\textbf{Gradient view (the key to everything below).} For a fixed target $q$, the gradient of
+$\CE(f,q)$ with respect to the logits is $f-q$. So the confidence loss pushes the logits along
+\[
+(1-\alpha)\,\underbrace{(f-\fw)}_{\text{imitate the teacher}}+\;\alpha\,\underbrace{(f-\fhat)}_{\text{sharpen your own answer}} .
+\]
+The second term moves probability mass towards the class the student already prefers: it is entropy
+minimisation / self-training (the paper cites Grandvalet \& Bengio 2004, Lee 2013, Reed et al.\ 2014).
+It helps when the student's own answer is better than the teacher's label, which is the whole point of
+weak-to-strong. It hurts when the student has already \emph{copied} a teacher mistake: then
+$\fhat=\fw$=the wrong class, and both terms push confidence in the wrong class up. In Tom\'as's earlier pilot
+(AlexNet $\to$ DINO ViT-B/8) copied errors were indeed more confident than the student's other errors
+(0.71 vs 0.61 with the confidence loss).
+
+\subsection{Why changing $\alpha$ per image is not really a new idea (the professor's point)}
+Our first idea (method C) was $\alpha_i=\alpha(1-u_i)$ with $u_i\in[0,1]$ the uncertainty of image $i$.
+Substituting into the target:
+\[
+(1-\alpha_i)\fw+\alpha_i\fhat=(1-\alpha)\,\fw+\alpha\,\big[(1-u_i)\,\fhat+u_i\,\fw\big].
+\]
+So ``per-image $\alpha$'' \emph{is} a modification of $\fhat$: it replaces $\fhat$ by a blend that
+\textbf{falls back to the teacher's label when the student is uncertain}. That answers the
+``same loss?'' question in our notes: yes, it is the same loss family, and seen this way the choice is not
+obviously good, because uncertain images are plausibly the ones where the teacher is wrong more often
+(we will measure this: hypothesis H3). The cleaner question is the professor's: \emph{what should the
+self-target be?}
+
+\subsection{Our self-target}
+For each training image, run $T$ stochastic forward passes of the student head (MC Dropout, e.g.\ $T=10$,
+no gradient): $p_1,\dots,p_T$, mean $\pbar=\frac1T\sum_tp_t$. U09's decomposition (also UQ deck, MC Dropout
+section):
+\[
+\underbrace{H(\pbar)}_{\text{total}}=\underbrace{\tfrac1T\textstyle\sum_tH(p_t)}_{\text{data (aleatoric)}}+
+\underbrace{H(\pbar)-\tfrac1T\textstyle\sum_tH(p_t)}_{\text{model (epistemic)}=:u(x)} .
+\]
+\[
+\ftil(x)=\begin{cases}\text{one-hot}(\arg\max\pbar(x)) & u(x)\le\tau \quad\text{(certain: harden, as A02)}\\
+\pbar(x) & u(x)>\tau\quad\text{(uncertain: abstain)}\end{cases}
+\quad L=\CE\big(f,(1-\alpha)\fw+\alpha\ftil\big).
+\]
+$\tau$ is the $q$-quantile of $u$ in the batch, so a fraction $q$ of each batch is hardened. $q=1$ gives A02
+(with the MC mean instead of a single pass); $q=0$ never hardens. $\alpha$ and its warm-up stay as in A02.
+
+\textbf{Why this is a sensible reading of the professor's hint.}
+\begin{itemize}
+\item In A02 the only place where the student's \emph{own belief} enters the loss is $\fhat$, and it enters as
+a point estimate with all uncertainty thrown away. Making $\fhat$ uncertainty-aware is the minimal change.
+\item A02 already has a threshold $t$ inside $\fhat$, set per batch. We keep that structure and change what
+is thresholded: the model uncertainty instead of the raw score.
+\item By the gradient view, on abstained images the self-term is $\alpha(f-\pbar)\approx0$: nothing is
+sharpened, the student stays as unsure as it is. On hardened images it behaves exactly like A02. So
+confidence is amplified only where the student's belief is stable across dropout masks.
+\item It is U09's ``classification with rejection'', applied to the student's own pseudo-labels at training
+time instead of to predictions at test time. $q$ plays the role of coverage.
+\end{itemize}
+
+\textbf{Why model uncertainty and not total entropy.} Total entropy is high on ambiguous images (data
+uncertainty) too; hardening there is harmless. Model uncertainty is high where heads that fit the weak
+labels equally well \emph{disagree}, which is where the weak labels fight the pretrained features. That is
+our candidate signal for ``the teacher may be wrong here''. It is a hypothesis, so the ablation compares
+total / data / model and a \emph{random} gate with the same $q$.
+
+\textbf{Variants (ablations D$'$).} (i) soft blend $\ftil=(1-\tilde u)\,\text{one-hot}+\tilde u\,\pbar$ with
+$\tilde u$ the batch rank of $u$, instead of a hard gate; (ii) ensemble of 5 heads instead of MC Dropout;
+(iii) method C, i.e.\ fallback to the teacher.
+
+\subsection{What would be an interesting result}
+\begin{enumerate}
+\item \textbf{D beats B and the random gate on error detection / accuracy--coverage at equal accuracy.}
+Positive result: uncertainty-aware self-training gives a more trustworthy weak-to-strong student.
+\item \textbf{D $\approx$ random gate.} Then model uncertainty carries no information about teacher errors in this
+setting (H3 fails): a clear negative finding about MC Dropout on frozen features, and the gain of C in the
+pilot was only due to less hardening on average.
+\item \textbf{Accuracy falls as $q$ decreases.} Then hardening everywhere is what produces the PGR gain, and there is
+a measurable trade-off between accuracy and uncertainty quality: plot both against $q$.
+\end{enumerate}
+In all three cases the figure ``accuracy and error-detection AUROC as a function of $q$'' is the centre of the poster.
+
+\subsection{Link to the course}
+\begin{itemize}
+\item \textbf{Intro-TAI requirements table:} we target \emph{uncertainty awareness}, \emph{reliability} and
+\emph{human oversight}; accuracy is a constraint, not the goal. Lifecycle view: we intervene at the
+\emph{model} (training) stage to improve a \emph{decision} stage policy (defer or predict).
+\item \textbf{UQ deck, what uncertainty enables (pp.\ 16--25):} safer prediction,
+$\text{defer}(x)=1\{U(x)>\tau\}$. Our gate is the same rule used at learning time.
+\item \textbf{UQ deck, sources (aleatoric vs epistemic) and methods (p.\ 35, tables pp.\ 37, 98):} MC Dropout and
+ensembles are the ``generate multiple predictions'' route; their disagreement is a \emph{proxy} for epistemic
+uncertainty, not a guarantee.
+\item \textbf{UQ deck, evaluating uncertainty (pp.\ 99--105):} calibration (ECE, reliability diagram), ``does
+uncertainty rank risk?'' (selective prediction, risk--coverage curve, AURC), ``does it survive shift?''
+(named corruptions: the optional CIFAR-10-C test).
+\item \textbf{UQ deck, from scores to decisions (pp.\ 107--113):} a validated score is not yet a policy; the
+defect-inspection example (inspect iff $\pi>c_{\text{inspect}}/c_{\text{defect}}$) is our motivation slide.
+\item \textbf{U09 / XAI:} U09 presents uncertainty as a local, model-specific explanation (``why should I not trust
+this prediction''), which is how we link to the XAI part of the course.
+\end{itemize}
+
+\section{Speaker notes (about 10 minutes; suggested split, change freely)}
+\textbf{Slide 1, title (20 s).} We are Group 3. Our project combines two of our midterm papers: weak-to-strong
+generalization and explainability through uncertainty. In one line: we let a strong student abstain from its
+own pseudo-labels during training.
+
+\textbf{Slide 2, issue and motivation (70 s).} The trustworthy AI issue is reliability and human oversight when
+the training labels come from a weaker supervisor. Take visual quality inspection. A factory has an old
+classifier and a new pretrained vision model. Nobody relabels the images, so the new model learns from the old
+model's labels. It becomes more accurate than its teacher, but it also copies some of the teacher's mistakes,
+and it is confident about them. So a defective part passes and no inspector is asked. What the factory needs
+is a model that sends the right images to a human. Accuracy alone does not give that.
+
+\textbf{Slide 3, A02 (80 s).} Our first key paper studies exactly this setting. A strong student is trained on a
+weak supervisor's labels. Their best method is the auxiliary confidence loss: the training target is a mix of
+the teacher's label and the student's own hardened prediction, f-hat. Alpha controls the mix. This lets the
+student disagree with its teacher and it increases the performance gap recovered. Two things remain open. The
+paper only reports accuracy. And f-hat is a point estimate that is hardened on every example. If the student
+has already copied a teacher error, f-hat equals the wrong label and the loss reinforces it. The official code
+is public, including the vision experiment, so the baseline is reproducible.
+
+\textbf{Slide 4, U09 (70 s).} Our second key paper gives the missing tool. Stage one: estimate uncertainty with
+several stochastic forward passes, MC Dropout or deep ensembles, and split total uncertainty into a data part
+and a model part. Stage two: classification with rejection: the most uncertain cases go to a human, and
+accuracy on the rest goes up, even under distribution shift. Its limits for us: it assumes clean labels, and
+uncertainty is only used after training. We re-implement it; MC Dropout is a few lines.
+
+\textbf{Slide 5, research question and contribution (60 s).} Our question: if we make the self-training target
+uncertainty-aware, does the student become more reliable about which predictions to trust, without losing
+accuracy? On the methodological side we propose an uncertainty-gated self-target, of which A02 is a special
+case, and we evaluate weak-to-strong learning by reliability, not only accuracy. On the practical side this is
+a training recipe for any pipeline that replaces a weak labeller with a pretrained model and has a limited
+human review budget. Note that we do not change alpha; we change where the student is allowed to trust itself.
+
+\textbf{Slide 6, method (100 s).} Three steps. One: for every training image we run T dropout passes of the
+student and compute the mean prediction and the model uncertainty, which is the disagreement between passes.
+Two: we harden the prediction only if the model uncertainty is below a threshold tau; otherwise we keep the
+soft mean prediction. Three: the A02 loss is unchanged, with our target in place of f-hat. Tau is a batch
+quantile, so a fraction q of each batch is hardened; q equal to one is A02. Why should it help? The gradient
+of cross-entropy is prediction minus target. A hard target pushes confidence up. A soft target equal to the
+student's own mean pushes almost nowhere. So confidence only grows where the student's belief is stable. This
+is U09's rejection, applied to the student's own pseudo-labels.
+
+\textbf{Slide 7, data and models (70 s).} Data: CIFAR-10 with one fixed split; ground truth is only used to train
+the teacher, for the ceiling and for testing. The weak teacher is a small CNN with 62 per cent accuracy, plus
+a stronger second teacher. The student is a frozen DINO vision transformer, pretrained on ImageNet without
+labels, with a small head with dropout. It is ``strong'' because with true labels it reaches 95.6 per cent. We
+compare naive training, the A02 loss, a per-image alpha variant we already piloted, and our gated target, with
+ablations: a random gate and different uncertainty types. Five seeds each.
+
+\textbf{Slide 8, evaluation (70 s).} Each metric answers one question. Accuracy and PGR: does the student still
+beat its teacher? The accuracy--coverage curve, our main metric: if the most uncertain images go to a human,
+how accurate is the rest? AUROC of the uncertainty for errors, and separately for errors copied from the
+teacher. ECE for calibration. And a diagnostic on the training set: are the images the gate refuses to harden
+really the ones the teacher mislabelled? We compare with a random gate at the same q, so a gain can only come
+from the uncertainty. A null result would also be informative.
+
+\textbf{Slide 9, pilot, plan, takeaway (60 s).} We have a pilot with three seeds for the simpler per-image alpha
+variant. Accuracy does not change, but error detection improves slightly and consistently, also on copied
+errors, which are the hardest to detect in every row. The gated target is not run yet. First results on
+December 2, ablations by December 16, poster on December 23. The main risk is that MC Dropout on a small head
+gives a weak signal; the fallback is a five-head ensemble. To close: A02 makes the student confident, U09 makes
+uncertainty actionable, and we test whether combining them during training gives a student that knows when
+not to be trusted.
+
+\section{Likely questions and short answers}
+\Q{Why not just change $\alpha$?} Because a per-image $\alpha$ is algebraically the same as replacing $\fhat$ by
+a blend that falls back to the teacher's label (Sect.\ 2.2). Changing $\fhat$ directly lets us choose a better
+fallback: the student's own soft belief.
+
+\Q{Is gating pseudo-labels new?} Not by itself. FixMatch (Sohn et al., 2020) keeps a pseudo-label only when the
+confidence is high, and UPS (Rizve et al., 2021) selects pseudo-labels by uncertainty, both in semi-supervised
+learning. New here: the weak-to-strong setting (every image has a weak label, some wrong, no clean labels), the
+gate placed inside A02's loss, and the evaluation by abstention and copied-error detection.
+
+\Q{Why would uncertainty know where the teacher is wrong?} It may not; that is hypothesis H3 and we measure it
+directly, since we hold the true training labels for evaluation only. The intuition: teacher errors contradict
+what the pretrained features suggest, so heads that fit the weak labels equally well disagree there.
+Supporting evidence: in A02 (Sect.\ 5, overfitting) and in our pilot the student first learns the clean
+pattern and only later fits the teacher's errors.
+
+\Q{If the student has confidently copied an error, uncertainty is low and the gate hardens it. Then what?}
+Correct, the gate cannot fix those. This is why the warm-up matters (the gate acts while disagreement still
+exists) and why we report copied errors separately.
+
+\Q{Data vs.\ model uncertainty?} Data (aleatoric): noise in the label given the image; does not vanish with more
+data. Model (epistemic): disagreement between plausible models; shrinks with relevant data. Example from U09,
+Table 1: passes (0.5,0.5),(0.5,0.5) are all data uncertainty; passes (1,0),(0,1) are all model uncertainty;
+same total.
+
+\Q{How strong is the student, and what was it pretrained on?} DINO ViT-S/16 (Caron et al., 2021),
+self-supervised on ImageNet \emph{without labels}. Trained on true CIFAR-10 labels it reaches 95.6\,\% against
+62\,\% for the teacher. Caveat: ImageNet contains similar objects, but no labels were seen; A02 uses the same
+argument for its DINO experiment (no ``pretraining leakage'' of labels).
+
+\Q{Why frozen features and a small head?} Cost: features are extracted once and each run takes seconds to
+minutes, so we can afford 5 seeds and all ablations. A02's vision experiment is also a linear probe on frozen
+DINO features. Limitation: results may differ with full fine-tuning.
+
+\Q{Why CIFAR-10 and not a real inspection dataset?} Clean ground truth is needed to count teacher errors and
+copied errors; CIFAR-10-C gives a standard shift test. The inspection case is the motivation, not the experiment.
+
+\Q{What is the baseline code?} A02: \url{https://github.com/openai/weak-to-strong} (MIT licence, has a
+\texttt{vision} folder for AlexNet $\to$ DINO). U09 cites no repository; MC Dropout, the decomposition and
+the rejection metrics are re-implemented by us.
+
+\Q{What are NRA, CQ, RQ?} U09's rejection metrics. Non-rejected accuracy: accuracy on what is kept.
+Classification quality: share of correct decisions (kept and right, or rejected and wrong). Rejection quality:
+how much misclassified cases are concentrated in the rejected set compared with the whole set.
+
+\Q{What is PGR?} $(\text{student}-\text{weak})/(\text{ceiling}-\text{weak})$. Pilot: $(0.720-0.624)/(0.956-0.624)=0.29$.
+
+\Q{The pilot gain is tiny (0.79 to 0.80). Is it worth it?} It is small but stable across seeds ($\pm0.004$),
+with a very weak teacher and the simplest variant. It motivates the proposal; it is not the result. We will
+report effect sizes with seed variation and accept a null result.
+
+\Q{Why is ECE worse with the confidence loss in the pilot (0.041 to 0.091)?} Hardening sharpens predictions;
+with a 62\,\% teacher the student then becomes over-confident. This is one more reason to gate the hardening.
+
+\Q{Theoretical contribution?} The gradient decomposition (imitate vs.\ sharpen), the equivalence between
+per-example $\alpha$ and a teacher-fallback self-target, and a one-parameter family ($q$) that contains A02 and
+makes the accuracy/uncertainty trade-off measurable.
+
+\Q{Where is the third paper (U03)?} After the 11 Nov discussion we focus on two papers, as advised; U03's idea
+(uncertainty under an unseen group) survives only as the optional shift test.
+
+\section{To check before Wednesday}
+\begin{itemize}
+\item The pilot table on slide 9 is copied from our shared notes (3 seeds). Whoever ran it should confirm the
+numbers and that ``$\pm$'' is the standard deviation across seeds.
+\item Decide who presents which slides (suggestion: one person 1--2 and 4, one 3 and 5--6, one 7--9) and rehearse
+once with a timer: the script is about 1{,}250 words.
+\item Submit the PDF of the slides.
+\end{itemize}
+
+\section*{References}
+\small
+\begin{itemize}
+\item Burns, C., et al.\ (2024). Weak-to-strong generalization: Eliciting strong capabilities with weak supervision. \emph{ICML}. arXiv:2312.09390.
+\item Thuy, A., \& Benoit, D.\,F.\ (2024). Explainability through uncertainty: Trustworthy decision-making with neural networks. \emph{European Journal of Operational Research}, 317, 330--340.
+\item Caron, M., et al.\ (2021). Emerging properties in self-supervised vision transformers. arXiv:2104.14294.
+\item Sohn, K., et al.\ (2020). FixMatch: Simplifying semi-supervised learning with consistency and confidence. \emph{NeurIPS}. arXiv:2001.07685.
+\item Rizve, M.\,N., Duarte, K., Rawat, Y.\,S., \& Shah, M.\ (2021). In defense of pseudo-labeling: An uncertainty-aware pseudo-label selection framework for semi-supervised learning. \emph{ICLR}. arXiv:2101.06329.
+\item Hendrycks, D., \& Dietterich, T.\ (2019). Benchmarking neural network robustness to common corruptions and perturbations. \emph{ICLR}.
+\item Cited through A02, App.\ A.4 (not opened by us): Grandvalet \& Bengio (2004), Lee (2013), Reed et al.\ (2014).
+\item Course slides: Hung, Y.-H.\ (2026). \emph{Trustworthy AI: Introduction to TAI} and \emph{Uncertainty Quantification} decks, NYCU.
+\end{itemize}
+\end{document}

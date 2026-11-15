@@ -1,0 +1,150 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+
+% --- Look of the course template (same as midterm) ---
+\definecolor{tblue}{RGB}{0,51,153}
+\definecolor{tred}{RGB}{140,20,20}
+\definecolor{keybg}{RGB}{232,240,250}
+\usecolortheme[named=tblue]{structure}
+\setbeamercolor{frametitle}{bg=tblue,fg=white}
+\setbeamercolor{block title}{bg=tblue,fg=white}
+\setbeamercolor{block body}{bg=keybg,fg=black}
+\setbeamercolor{block title alerted}{bg=tred,fg=white}
+\setbeamercolor{block body alerted}{bg=keybg,fg=black}
+\setbeamercolor{footline}{bg=tblue,fg=white}
+\setbeamertemplate{blocks}[rounded][shadow=true]
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[triangle]
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip\begin{beamercolorbox}[wd=\paperwidth,ht=2.6ex,dp=1.2ex,leftskip=0.6em]{frametitle}%
+  \usebeamerfont{frametitle}\bfseries\insertframetitle\end{beamercolorbox}}
+\setbeamerfont{frametitle}{size=\normalsize}
+\setbeamertemplate{footline}{%
+  \begin{beamercolorbox}[wd=\paperwidth,ht=2ex,dp=0.8ex,leftskip=0.6em,rightskip=0.6em]{footline}%
+  \tiny Trustworthy AI | Final Project Discussion\hfill\insertframenumber/\inserttotalframenumber
+  \end{beamercolorbox}}
+\newcommand{\keymsg}[1]{%
+  \begin{beamercolorbox}[wd=\textwidth,sep=0.7em,rounded=true]{block body}\small\textbf{Key message:} #1\end{beamercolorbox}}
+
+\begin{document}
+
+% ---------------------------------------------------------------- 1
+\begin{frame}[plain]
+\vspace{1.4em}
+\begin{beamercolorbox}[wd=0.92\paperwidth,sep=0.8em,center,rounded=true,shadow=true]{frametitle}
+{\large\bfseries Knowing When Not to Trust a Weakly Supervised Model}\\[0.3em]
+\small\bfseries Uncertainty-aware abstention under weak supervision and distribution shift
+\end{beamercolorbox}
+\vspace{1.4em}
+\centering
+Group 3\\[0.4em] Chlo\'e Deux-Pancera \quad|\quad Tom\'as Saura Mart\'{\i}nez \quad|\quad KACEM HADJI\\[0.6em]
+{\scriptsize National Yang Ming Chiao Tung University}\\[0.6em]
+Project discussion -- November 11, 2026\\[1.2em]
+\footnotesize\textbf{Key papers:} Weak-to-Strong Generalization (A02) \;$\cdot$\; Explainability through Uncertainty (U09)
+\;$\cdot$\; Uncertainty-Aware Mixed-Variable ML (U03)
+\end{frame}
+
+% ---------------------------------------------------------------- 2
+\begin{frame}{Trustworthy AI Issue and Motivation}
+\begin{block}{Issue: reliability and human oversight}
+A model is often trained on labels from a \textbf{weaker supervisor} (a human, a smaller model) and then
+used on \textbf{shifted data}. No ground truth exists to check it, so its \textbf{own uncertainty} is the only
+signal for when to defer to a human.
+\end{block}
+\begin{itemize}\small
+\item Our three individual proposals hit the same gap from three sides:
+  \begin{itemize}\footnotesize
+  \item weak labels (A02) \quad $\cdot$ \quad corrupted inputs (U09) \quad $\cdot$ \quad an unseen group of data (U03)
+  \end{itemize}
+\item \textbf{Pilot} (CIFAR-10, AlexNet supervisor $\to$ DINO ViT-B/8 student):
+  \begin{itemize}\footnotesize
+  \item the naive student recovers 53\% of the gap and is under-confident (ECE 8.3\%);
+    with the confidence loss: 84\% and ECE 2.7\%, \emph{but}
+  \item errors \textbf{copied from the supervisor} are \emph{more} confident than the student's other errors (0.71 vs 0.61).
+  \end{itemize}
+\end{itemize}
+\keymsg{high accuracy does not mean the model knows when it is wrong.}
+\end{frame}
+
+% ---------------------------------------------------------------- 3
+\begin{frame}{Problem and Research Questions}
+\begin{block}{Problem}
+Can a weakly supervised model tell us when \emph{not} to trust it, on clean and on corrupted inputs?
+\end{block}
+\vspace{0.3em}
+\begin{enumerate}\small
+\item \textbf{Calibration.} Is the student calibrated, and does its uncertainty flag the errors it copied
+from the supervisor?
+\item \textbf{Abstention.} If the student rejects its most uncertain inputs, does accuracy on the rest
+recover, under noise and blur? Which signal works best: softmax, MC Dropout or an ensemble?
+\end{enumerate}
+\end{frame}
+
+% ---------------------------------------------------------------- 4
+\begin{frame}{Key Papers: What We Take and How We Extend}
+\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.17\textwidth}p{0.34\textwidth}p{0.36\textwidth}}
+\toprule
+\textbf{Paper} & \textbf{Main method} & \textbf{Our use / extension}\\
+\midrule
+\textbf{A02} Burns et al., ICML 2024 & Strong student trained on weak labels; PGR; auxiliary confidence loss &
+Same setting. \textbf{New:} judge \emph{uncertainty and abstention}, not only accuracy\\[0.4em]
+\textbf{U09} Explainability through uncertainty & Uncertainty as explanation; reject uncertain cases;
+accuracy--coverage curves & Abstention rule and curves, applied to \emph{weakly supervised} students under shift\\[0.4em]
+\textbf{U03} Zhang et al., Sci.\ Rep.\ 2022 & GP / LVGP uncertainty to guide decisions with categorical inputs &
+Corruption type as a group: leave-one-corruption-out test of the uncertainty\\
+\midrule
+Support & \multicolumn{2}{p{0.72\textwidth}}{Ovadia et al.\ 2019 (UQ under shift); CIFAR-10-C (Hendrycks \& Dietterich 2019)}\\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+% ---------------------------------------------------------------- 5
+\begin{frame}{Planned Data, Methods and Evaluation}
+\begin{columns}[T]
+\column{0.5\textwidth}
+\begin{block}{Data and models}
+\footnotesize
+\begin{itemize}
+\item \textbf{CIFAR-10} for training; \textbf{CIFAR-10-C} (noise, blur, 5 severities) for shift
+\item Weak supervisor: AlexNet / small CNN
+\item Strong student: frozen DINO ViT features + small head (cheap)
+\item Ceiling: same student on true labels
+\item Students: trained on weak labels vs on true labels
+\item Uncertainty: softmax, MC Dropout, 5-head ensemble
+\end{itemize}
+\end{block}
+\column{0.5\textwidth}
+\begin{block}{Evaluation}
+\footnotesize
+\begin{itemize}
+\item Accuracy and PGR
+\item ECE and reliability diagrams, per severity
+\item Accuracy--coverage curves (abstention)
+\item AUROC of uncertainty for spotting errors, and \emph{copied} supervisor errors
+\item 3 seeds; leave-one-corruption-out
+\end{itemize}
+\end{block}
+\end{columns}
+\vspace{0.4em}
+\footnotesize\textbf{Team split:} weak-to-strong pipeline \;|\; corruptions + abstention \;|\; UQ layer (MC Dropout, ensembles, metrics)
+\end{frame}
+
+% ---------------------------------------------------------------- 6
+\begin{frame}{Questions for Feedback}
+\begin{enumerate}
+\item \textbf{Scope.} Is weak supervision \emph{plus} distribution shift too much for one project?
+Should we keep only two corruptions (noise, blur)?
+\item \textbf{Comparison.} Is a frozen-feature student acceptable, or is full fine-tuning expected?
+Are softmax, MC Dropout and ensembles enough as baselines?
+\item \textbf{Timeline.} Is this scope realistic for the poster on Dec 23?
+Our plan: pipeline and pilot by Nov 18, first results by Dec 2, full results by Dec 16.
+\end{enumerate}
+\vspace{0.8em}
+\keymsg{one pipeline, three angles on the same question: can the model tell us when not to trust it?}
+\end{frame}
+
+\end{document}
