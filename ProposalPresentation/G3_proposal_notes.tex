@@ -133,8 +133,8 @@ uncertainty, not a guarantee.
 \item \textbf{UQ deck, evaluating uncertainty (pp.\ 99--105):} calibration (ECE, reliability diagram), ``does
 uncertainty rank risk?'' (selective prediction, risk--coverage curve, AURC), ``does it survive shift?''
 (named corruptions: the optional CIFAR-10-C test).
-\item \textbf{UQ deck, from scores to decisions (pp.\ 107--113):} a validated score is not yet a policy; the
-defect-inspection example (inspect iff $\pi>c_{\text{inspect}}/c_{\text{defect}}$) is our motivation slide.
+\item \textbf{UQ deck, from scores to decisions (pp.\ 107--113):} a validated score is not yet a policy; deferring
+the most uncertain predictions to a human is the decision our evaluation targets.
 \item \textbf{U09 / XAI:} U09 presents uncertainty as a local, model-specific explanation (``why should I not trust
 this prediction''), which is how we link to the XAI part of the course.
 \end{itemize}
@@ -145,11 +145,10 @@ generalization and explainability through uncertainty. In one line: we let a str
 own pseudo-labels during training.
 
 \textbf{Slide 2, issue and motivation (70 s).} The trustworthy AI issue is reliability and human oversight when
-the training labels come from a weaker supervisor. Take visual quality inspection. A factory has an old
-classifier and a new pretrained vision model. Nobody relabels the images, so the new model learns from the old
-model's labels. It becomes more accurate than its teacher, but it also copies some of the teacher's mistakes,
-and it is confident about them. So a defective part passes and no inspector is asked. What the factory needs
-is a model that sends the right images to a human. Accuracy alone does not give that.
+the training labels come from a weaker supervisor. A strong pretrained model learns from a weaker model's
+labels, because no ground truth is available. It becomes more accurate than its teacher, but it also copies
+some of the teacher's mistakes, and it is confident about them, so nobody is asked to check them. What is
+needed is a model that sends the right predictions to a human. Accuracy alone does not give that.
 
 \textbf{Slide 3, A02 (80 s).} Our first key paper studies exactly this setting. A strong student is trained on a
 weak supervisor's labels. Their best method is the auxiliary confidence loss: the training target is a mix of
@@ -237,8 +236,8 @@ argument for its DINO experiment (no ``pretraining leakage'' of labels).
 minutes, so we can afford 5 seeds and all ablations. A02's vision experiment is also a linear probe on frozen
 DINO features. Limitation: results may differ with full fine-tuning.
 
-\Q{Why CIFAR-10 and not a real inspection dataset?} Clean ground truth is needed to count teacher errors and
-copied errors; CIFAR-10-C gives a standard shift test. The inspection case is the motivation, not the experiment.
+\Q{Why CIFAR-10?} Clean ground truth is needed to count teacher errors and copied errors; CIFAR-10-C gives a
+standard shift test.
 
 \Q{What is the baseline code?} A02: \url{https://github.com/openai/weak-to-strong} (MIT licence, has a
 \texttt{vision} folder for AlexNet $\to$ DINO). U09 cites no repository; MC Dropout, the decomposition and

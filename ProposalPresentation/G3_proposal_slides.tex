@@ -91,12 +91,12 @@ that tells a human which predictions to check.
 \end{block}
 \vspace{-0.2em}
 \begin{itemize}\small
-  \item \textbf{Example: automated visual quality inspection.} A legacy classifier labels product images; a
-  pretrained vision model learns from these imperfect labels and replaces it on the line.
-  \item \textbf{The risk:} the new model \emph{copies} some of the old model's mistakes and is confident about
-  them, so a defective part is approved and nobody is asked to look.
-  \item \textbf{What the factory needs:} not only higher accuracy, but a model that \emph{defers} the right
-  images to an inspector (same pattern: medical triage, content moderation).
+  \item \textbf{The setting:} a strong pretrained model learns from a weaker model's imperfect labels instead of
+  ground truth.
+  \item \textbf{The risk:} the strong model \emph{copies} some of its teacher's mistakes and is confident about
+  them, so nobody is asked to check them.
+  \item \textbf{What is needed:} not only higher accuracy, but a model that \emph{defers} the right predictions
+  to a human.
 \end{itemize}
 \vspace{0.2em}
 \keymsg{under weak supervision, accuracy alone is not trust: the model must know when its teacher,
