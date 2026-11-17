@@ -304,39 +304,41 @@ H3: teacher-error rate higher above $\tau$ than below\\
 \begin{frame}[t]{Pilot Evidence, Plan and Takeaway}
 \begin{columns}[T,totalwidth=\textwidth]
 \column{0.57\textwidth}
-\small\textbf{Pilot} (CIFAR-10, small CNN $\to$ DINO ViT-S/16, 3 seeds)
+\small\textbf{Pilot} (CIFAR-10, weak teacher acc.\ 0.618, 3 seeds)
 
 \vspace{0.2em}
 \scriptsize\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}lcccc@{}}
+\begin{tabular}{@{}lccccc@{}}
 \toprule
-Method & Acc. & Acc.@80\% & AUROC & AUROC\\
- & & cov. & errors & copied\\
+Method & Acc. & Acc.@80\% & ECE & AUROC & AUROC\\
+ & & cov. & & errors & copied\\
 \midrule
-Weak teacher & 0.624 & -- & -- & --\\
-A: naive & 0.720 & 0.793 & 0.793 & 0.735\\
-B: A02 ($\alpha=0.5$) & 0.727 & 0.801 & 0.794 & 0.733\\
-C: per-image $\alpha$ & 0.726 & 0.805 & \textbf{0.804} & \textbf{0.745}\\
-Ceiling (true labels) & 0.956 & 0.996 & 0.944 & 0.926\\
+A: naive & 0.715 & 0.792 & 0.033 & 0.795 & 0.740\\
+B: A02 ($\alpha=0.5$) & 0.725 & 0.802 & 0.090 & 0.797 & 0.737\\
+C: per-image $\alpha$ & 0.728 & 0.807 & 0.051 & 0.805 & 0.746\\
+\textbf{D: gated $\ftil$, $q=0.5$} & 0.728 & 0.807 & 0.033 & 0.806 & 0.749\\
+D, random gate & 0.735 & 0.813 & 0.043 & 0.804 & 0.749\\
+Ceiling (true labels) & 0.956 & 0.996 & 0.024 & 0.944 & 0.928\\
 \bottomrule
 \end{tabular}
 
-\vspace{0.3em}
-\footnotesize
-Accuracy is unchanged ($\pm0.03$ across seeds); error detection improves slightly but consistently
-($\pm0.004$). Copied errors are the hardest to flag in every row. D is not run yet.
+\vspace{0.2em}
+\scriptsize
+\textbf{Gate (H3) works:} teacher wrong on 16\% of images D hardens vs.\ 61\% it keeps soft
+(random gate: 38\% / 38\%). Accuracy gaps are within seed noise ($\pm$0.02--0.04); D beats B on ECE
+and AUROC in all 3 seeds, but is no better than the random gate.
 \column{0.40\textwidth}
 \begin{block}{Plan}
 \footnotesize
 \begin{itemize}
-  \item \textbf{Dec 2:} A--D on one teacher, 5 seeds; gate diagnostic.
+  \item \textbf{Dec 2:} A--D, 5 seeds; all-soft control ($q=0$).
   \item \textbf{Dec 16:} ablations, second teacher, CIFAR-10-C.
   \item \textbf{Dec 23:} poster and report.
 \end{itemize}
 \end{block}
 \footnotesize
-\textbf{Main risk:} MC Dropout on a small head may give a weak model-uncertainty signal. Fallback: a
-5-head ensemble (U09's second estimator).
+\textbf{Main risk:} the gain may come from soft targets alone, not from \emph{which} images are
+hardened. Fallback estimator: 5-head ensemble (U09).
 \end{columns}
 \vspace{0.3em}
 \keymsg{A02 makes the student confident; U09 makes uncertainty actionable. We test whether combining them
