@@ -112,11 +112,9 @@ $\tilde u$ the batch rank of $u$, instead of a hard gate; (ii) ensemble of 5 hea
 \begin{enumerate}
 \item \textbf{D beats B and the random gate on error detection / accuracy--coverage at equal accuracy.}
 Positive result: uncertainty-aware self-training gives a more trustworthy weak-to-strong student.
-\item \textbf{D $\approx$ random gate.} Two different readings, told apart by the gate diagnostic. If H3 fails, model
-uncertainty carries no information about teacher errors (a negative finding about MC Dropout on frozen features).
-If H3 holds but D still equals the random gate, the gate finds the teacher's errors but the student does not
-need that selection: the gain comes from soft targets alone (test: the all-soft control $q=0$). \emph{The 16 Nov
-pilot is in the second case} (slide 9).
+\item \textbf{D $\approx$ random gate.} Then model uncertainty carries no information about teacher errors in this
+setting (H3 fails): a clear negative finding about MC Dropout on frozen features, and the gain of C in the
+pilot was only due to less hardening on average.
 \item \textbf{Accuracy falls as $q$ decreases.} Then hardening everywhere is what produces the PGR gain, and there is
 a measurable trade-off between accuracy and uncertainty quality: plot both against $q$.
 \end{enumerate}
@@ -187,8 +185,8 @@ is U09's rejection, applied to the student's own pseudo-labels.
 the teacher, for the ceiling and for testing. The weak teacher is a small CNN with 62 per cent accuracy, plus
 a stronger second teacher. The student is a frozen DINO vision transformer, pretrained on ImageNet without
 labels, with a small head with dropout. It is ``strong'' because with true labels it reaches 95.6 per cent. We
-compare naive training, the A02 loss, a per-image alpha variant, and our gated target (all four already piloted),
-with ablations: a random gate and different uncertainty types. Five seeds each.
+compare naive training, the A02 loss, a per-image alpha variant we already piloted, and our gated target, with
+ablations: a random gate and different uncertainty types. Five seeds each.
 
 \textbf{Slide 8, evaluation (70 s).} Each metric answers one question. Accuracy and PGR: does the student still
 beat its teacher? The accuracy--coverage curve, our main metric: if the most uncertain images go to a human,
@@ -197,17 +195,13 @@ teacher. ECE for calibration. And a diagnostic on the training set: are the imag
 really the ones the teacher mislabelled? We compare with a random gate at the same q, so a gain can only come
 from the uncertainty. A null result would also be informative.
 
-\textbf{Slide 9, pilot, plan, takeaway (60--90 s).} We already ran the whole pipeline with three seeds, including
-our gated target with half of each batch hardened, and the same gate chosen at random. First, the gate does
-what it should: the teacher is wrong on 16 per cent of the images it hardens and on 61 per cent of the images
-it keeps soft; a random gate gives 38 per cent for both. Second, accuracy does not separate any method: the
-differences are smaller than the variation between seeds. Third, against the A02 loss, our target lowers the
-calibration error from 0.09 to 0.03 and raises error-detection AUROC on all three seeds. But it is no better
-than the random gate. So far the gain comes from using soft targets, not from choosing them by uncertainty.
-That is exactly what the project must settle: on December 2 we add an all-soft control and five seeds; by
-December 16 the ablations, a second teacher and CIFAR-10-C, where the choice may matter more; poster on
-December 23. To close: A02 makes the student confident, U09 makes uncertainty actionable, and we test whether
-combining them during training gives a student that knows when not to be trusted.
+\textbf{Slide 9, pilot, plan, takeaway (60 s).} We have a pilot with three seeds for the simpler per-image alpha
+variant. Accuracy does not change, but error detection improves slightly and consistently, also on copied
+errors, which are the hardest to detect in every row. The gated target is not run yet. First results on
+December 2, ablations by December 16, poster on December 23. The main risk is that MC Dropout on a small head
+gives a weak signal; the fallback is a five-head ensemble. To close: A02 makes the student confident, U09 makes
+uncertainty actionable, and we test whether combining them during training gives a student that knows when
+not to be trusted.
 
 \section{Likely questions and short answers}
 \Q{Why not just change $\alpha$?} Because a per-image $\alpha$ is algebraically the same as replacing $\fhat$ by
@@ -221,8 +215,7 @@ gate placed inside A02's loss, and the evaluation by abstention and copied-error
 
 \Q{Why would uncertainty know where the teacher is wrong?} It may not; that is hypothesis H3 and we measure it
 directly, since we hold the true training labels for evaluation only. The intuition: teacher errors contradict
-what the pretrained features suggest, so heads that fit the weak labels equally well disagree there. In the
-16 Nov pilot (D, $q=0.5$) it does: the teacher is wrong on 16\,\% of hardened vs.\ 61\,\% of soft images (3 seeds).
+what the pretrained features suggest, so heads that fit the weak labels equally well disagree there.
 Supporting evidence: in A02 (Sect.\ 5, overfitting) and in our pilot the student first learns the clean
 pattern and only later fits the teacher's errors.
 
@@ -255,22 +248,14 @@ the rejection metrics are re-implemented by us.
 Classification quality: share of correct decisions (kept and right, or rejected and wrong). Rejection quality:
 how much misclassified cases are concentrated in the rejected set compared with the whole set.
 
-\Q{What is PGR?} $(\text{student}-\text{weak})/(\text{ceiling}-\text{weak})$. Pilot, naive student:
-$(0.715-0.618)/(0.956-0.618)=0.29$.
+\Q{What is PGR?} $(\text{student}-\text{weak})/(\text{ceiling}-\text{weak})$. Pilot: $(0.720-0.624)/(0.956-0.624)=0.29$.
 
-\Q{The pilot gain is tiny (AUROC 0.797 to 0.806). Is it worth it?} It is small, but D beats B on all three seeds,
-with a very weak teacher and a frozen backbone. It motivates the proposal; it is not the result. We will report
-paired differences with 5 seeds and accept a null result.
+\Q{The pilot gain is tiny (0.79 to 0.80). Is it worth it?} It is small but stable across seeds ($\pm0.004$),
+with a very weak teacher and the simplest variant. It motivates the proposal; it is not the result. We will
+report effect sizes with seed variation and accept a null result.
 
-\Q{Why is your gated target no better than a random gate?} The gate itself works (16\,\% vs.\ 61\,\% teacher errors),
-so the uncertainty signal is informative. But with half of each batch soft, the student seems to gain from the
-softening, whichever half it is. Next: the all-soft control ($q=0$) separates the two, and harder settings
-(weaker teacher, CIFAR-10-C) are where selecting the right images should matter. If D still equals the random
-gate there, we report it as a negative result.
-
-\Q{Why is ECE worse with the confidence loss in the pilot (0.033 to 0.090)?} Hardening sharpens predictions;
-with a 62\,\% teacher the student then becomes over-confident, and unstably so (0.134 on one seed). Keeping half
-of the targets soft brings it back to 0.033 (random gate: 0.043).
+\Q{Why is ECE worse with the confidence loss in the pilot (0.041 to 0.091)?} Hardening sharpens predictions;
+with a 62\,\% teacher the student then becomes over-confident. This is one more reason to gate the hardening.
 
 \Q{Theoretical contribution?} The gradient decomposition (imitate vs.\ sharpen), the equivalence between
 per-example $\alpha$ and a teacher-fallback self-target, and a one-parameter family ($q$) that contains A02 and
@@ -281,10 +266,11 @@ makes the accuracy/uncertainty trade-off measurable.
 
 \section{To check before Wednesday}
 \begin{itemize}
-\item Slide 9 now uses Djamel's 16 Nov run (\texttt{pilot/results/}, 3 seeds, methods A--D); every number was
-recomputed from the JSON files. Seed spread in the text is the standard deviation across seeds.
-\item Split agreed on 17 Nov: Tom\'as slides 1--5, Djamel 6--9. Rehearse once with a timer (about 1{,}000 words).
-\item Upload the slides (PDF) to E3 by \textbf{08:00 on 18 Nov}. G3 presents 6th (G8, G5, G9, G4, G2, G3, \dots).
+\item The pilot table on slide 9 is copied from our shared notes (3 seeds). Whoever ran it should confirm the
+numbers and that ``$\pm$'' is the standard deviation across seeds.
+\item Decide who presents which slides (suggestion: one person 1--2 and 4, one 3 and 5--6, one 7--9) and rehearse
+once with a timer: the script is about 1{,}250 words.
+\item Submit the PDF of the slides.
 \end{itemize}
 
 \section*{References}
